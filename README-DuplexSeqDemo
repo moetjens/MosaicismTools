@@ -1,0 +1,126 @@
+#Created 08-21-2015
+
+The plan here is to run the loeb duplex bioinformatic pipeline (https://github.com/loeblab/Duplex-Sequencing)  
+on their test data to get a handle on the data.  Start with fastq files and should end with a 
+bam file containing the duplex reads. Numbers in parenthesis refer to the steps in the Kennedy et al. Nature Protocols
+manuscript.
+
+1.  Downloaded loeb lab test sample "Sequencing of ABL1 from a CML patient" from PMID:25849638
+
+Added /home/moetjens/kidd-lab/progs/sratoolkit.2.4.2-centos_linux64/bin to path
+
+[moetjens@axiom loebtest]$ fastq-dump --split-files --gzip -A SRR1799908
+Read 6921891 spots for SRR1799908
+Written 6921891 spots for SRR179990
+
+2.  Adding the loeb pipeline to my path
+
+3.  Run the SRA fixer.
+
+# Made an edit to the SRAFixer.py script
+# 	-changed line43 to readNum = line.split(' ')[0].split('.')[1]
+# 	-format in fastq file was @SRR1613972.1 and not the expected @SRR1613972.1.1.  
+
+SRAFixer.py --infile SRR1799908_1.fastq --outfile SRR1799908_1.SRAFix.fastq
+#Reads Processed: 6,921,000
+SRAFixer.py --infile SRR1799908_2.fastq --outfile SRR1799908_2.SRAFix.fastq
+#Reads Processed: 6,921,000
+
+
+4.  Writing the bash script and running it on axiom
+# These are the settings used for the mouse sample, which the paper claims the human sample was identical. 
+# In this first run we will use the same ones here
+# 
+# Read length --rlength 101 
+# Minimum family size  --min 3
+# Maximum family size  --max 1000
+# Consensus cutoff=0.7  --cut 0.7
+# N Cutoff  --Ncut 0.3
+# read Types used in consensus making  --read_type dpm
+# Filters used  --filt os
+# 
+# Reads appear to be the same length:
+# [moetjens@axiom loebTest]$ head SRR1799908_1.fastq 
+# @SRR1799908.1 HWI-7001239F_078:2:1101:1274:2240 length=101
+# GAGAGCCAAAAATGACTCGTACCCTGGGCACCCCCGGCAGTCCCAGCCTACCTTCAAGGTCTTCACGGCCACCGTCAGGCTGTATTTCTTCCACACGCCCT
+# +SRR1799908.1 HWI-7001239F_078:2:1101:1274:2240 length=101
+# ^__eeeeegggfgiiiiiiihhiihiihhihhdgfghiiihiiiiiigggbccceeeddZ`bdbbbcccccccccccacccaabcdccdbcbcccc][_a_
+
+
+PE_BASH_MAKER.py --ref /home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.7.5-index/hg19.fa  --r1src SRR1799908_1.SRAFix.fastq \
+--r2src SRR1799908_2.SRAFix.fastq --runIdentifier loeb-HumanTest_09212015 --rlength 101  --min 3 --max 1000 --cut 0.7 \
+--Ncut 0.3 --read_type dpm --filt os
+
+5.  Edits to Pipeline
+
+Changed tag_to_header.py script
+	-throwing display error so need to use non-interactive backend for matlab
+	-line247 changed from import matplotlib.pyplot as plt to:
+	import matplotlib
+	matplotlib.use('Agg')
+	import matplotlib.pyplot as plt 
+
+#tag_to_header.py --infile1 SRR1799908_1.SRAFix.fastq --infile2 SRR1799908_2.SRAFix.fastq --outprefix tmp --tagstats
+
+6.  Running the pipeline
+
+echo 'cd /home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/duplexSeq/loebTest_Human; \
+ bash loeb-HumanTest_09212015.script.sh 3>&1 1>&2 2>&3 | tee -a loeb-HumanTest_09212015..se.log.txt ' \
+ | qsub -l mem=75gb,walltime=200:00:00 -N LoebHuman -j oe -V
+1009084.axiom.localdomain
+
+qsub loeb-HumanTest_09212015.script.sh -l walltime=100:00:00 -l mem=75G
+
+7.  Additional steps
+
+(67) filter out unmapped reads from the final DCS.bam file:
+samtools view -F 4 -b loeb-HumanTest_09212015.dcs.aln.sort.bam > loeb-HumanTest_09212015.dcs.filt.bam
+
+(68) add readgroups to the header of the final DCS .bam file with PIcard to-
+allow for compatiblity with the GATK using Picard tools:
+java -jar -Xmx2g ~/kidd-lab/progs/picard-tools-1.62/AddOrReplaceReadGroups.jar \
+INPUT=loeb-HumanTest_09212015.dcs.filt.bam \
+OUTPUT=loeb-HumanTest_09212015.dcs.filt.readgroups.bam \
+RGLB=Loeb-Kennedy RGPL=Illumina RGPU=ATATA RGSM=Human
+
+(69) Index the final sorted DCS .bam file:
+samtools index loeb-HumanTest_09212015.dcs.filt.readgroups.bam 
+
+(70) Perform local realignment using GATK.  First identify the targets for local-realignment.
+https://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_gatk_tools_walkers_indels_RealignerTargetCreator.php
+
+#performed on chr9 (location of ABL1) only with -L chr9 flag and didn't see any indels...
+
+This command identifies the realignment targets:
+echo 'cd /home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/duplexSeq/loebTest_Human; \
+java -Xmx2g -jar /home/jmkidd/kidd-lab/progs/GenomeAnalysisTK-1.2-65-ge4a583a/GenomeAnalysisTK.jar  -T \
+RealignerTargetCreator -R /home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa \
+-I loeb-HumanTest_09212015.dcs.filt.readgroups.bam -o loeb-HumanTest_09212015.dcs.filt.readgroups.intervals' \
+ | qsub -l mem=25gb,walltime=200:00:00 -N GATK -j oe -V
+
+This command performs the actual realignment:
+
+echo 'cd /home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/duplexSeq/loebTest_Human; \
+java -Xmx2g -jar /home/jmkidd/kidd-lab/progs/GenomeAnalysisTK-1.2-65-ge4a583a/GenomeAnalysisTK.jar  -T \
+IndelRealigner -targetIntervals loeb-HumanTest_09212015.dcs.filt.readgroups.intervals \
+-R /home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa \
+-I loeb-HumanTest_09212015.dcs.filt.readgroups.bam -o loeb-HumanTest_09212015.dcs.realign.bam' \
+ | qsub -l mem=25gb,walltime=200:00:00 -N GATK -j oe -V
+ 
+(71) Perform end trimming of the DCS reads.  Trims the 5 bases from the 3' and 5' ends.  Removes errors caused by 
+the enzymatic proces during library construction...
+
+java -Xmx2g -jar /home/jmkidd/kidd-lab/progs/GenomeAnalysisTK-1.2-65-ge4a583a/GenomeAnalysisTK.jar -T ClipReads -I \
+loeb-HumanTest_09212015.dcs.realign.bam -o HumanLoeb.09212015.DCS-final.bam \
+-R /home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa --cyclesToTrim "1-5,80-84" --clipRepresentation SOFTCLIP_BASES
+
+
+8.  Analysis
+
+(73) Make a pileup file form the final DCS reads usign the following example command:
+samtools mpileup -B -A -d 500000 -f/home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa HumanLoeb.09212015.DCS-final.bam > \
+HumanLoeb.09212015.DCS-final.bam.pileup 
+
+cat HumanLoeb.09212015.DCS-final.bam.pileup | CountMuts.py -d 100 -c 0 -C 0.01 -u > HumanLoeb.09212015.DCS-final.bam.countmuts
+
+
