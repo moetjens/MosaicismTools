@@ -118,7 +118,7 @@ loeb-HumanTest_09212015.dcs.realign.bam -o HumanLoeb.09212015.DCS-final.bam \
 8.  Analysis
 
 (73) Make a pileup file form the final DCS reads usign the following example command:
-samtools mpileup -B -A -d 500000 -f/home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa HumanLoeb.09212015.DCS-final.bam > \
+samtools mpileup -B -A -d 500000 -f /home/jmkidd/kidd-lab/genomes/hg19/hg19-cat/bwa-0.5.9-index/hg19.fa HumanLoeb.09212015.DCS-final.bam > \
 HumanLoeb.09212015.DCS-final.bam.pileup 
 
 cat HumanLoeb.09212015.DCS-final.bam.pileup | CountMuts.py -d 100 -c 0 -C 0.01 -u > HumanLoeb.09212015.DCS-final.bam.countmuts
