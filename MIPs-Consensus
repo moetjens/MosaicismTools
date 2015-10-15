@@ -1,0 +1,240 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "import pysam\n",
+    "from collections import defaultdict\n",
+    "import copy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "ename": "NameError",
+     "evalue": "name 'pysam' is not defined",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[1;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[1;31mNameError\u001b[0m                                 Traceback (most recent call last)",
+      "\u001b[1;32m<ipython-input-1-e484ddf3520a>\u001b[0m in \u001b[0;36m<module>\u001b[1;34m()\u001b[0m\n\u001b[1;32m----> 1\u001b[1;33m \u001b[0minBam\u001b[0m\u001b[1;33m=\u001b[0m \u001b[0mpysam\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mSamfile\u001b[0m\u001b[1;33m(\u001b[0m\u001b[1;34m\"/home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/MIPs/Run_2015-03-06/Trp53_processed.usassembled.bam\"\u001b[0m\u001b[1;33m,\u001b[0m \u001b[1;34m\"rb\"\u001b[0m\u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0m\u001b[0;32m      2\u001b[0m \u001b[0moutBam\u001b[0m\u001b[1;33m=\u001b[0m \u001b[0mpysam\u001b[0m\u001b[1;33m.\u001b[0m\u001b[0mSamfile\u001b[0m\u001b[1;33m(\u001b[0m\u001b[1;34m\"/home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/MIPs/Run_2015-03-06/Trp53_processed.unassembled.consensusTest.bam\"\u001b[0m\u001b[1;33m,\u001b[0m \u001b[1;34m\"wb\"\u001b[0m\u001b[1;33m,\u001b[0m \u001b[0mtemplate\u001b[0m \u001b[1;33m=\u001b[0m \u001b[0minBam\u001b[0m \u001b[1;33m)\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0;32m      3\u001b[0m \u001b[0mmyData\u001b[0m \u001b[1;33m=\u001b[0m \u001b[1;33m{\u001b[0m\u001b[1;33m}\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0;32m      4\u001b[0m \u001b[1;31m#in the header of the bam, only the barcode was saved...\u001b[0m\u001b[1;33m\u001b[0m\u001b[1;33m\u001b[0m\u001b[0m\n\u001b[0;32m      5\u001b[0m \u001b[1;33m\u001b[0m\u001b[0m\n",
+      "\u001b[1;31mNameError\u001b[0m: name 'pysam' is not defined"
+     ]
+    }
+   ],
+   "source": [
+    "inBam= pysam.Samfile(\"/home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/MIPs/Run_2015-03-06/Trp53_processed.usassembled.bam\", \"rb\")\n",
+    "outBam= pysam.Samfile(\"/home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/MIPs/Run_2015-03-06/Trp53_processed.unassembled.consensusTest.bam\", \"wb\", template = inBam )\n",
+    "myData = {}\n",
+    "#in the header of the bam, only the barcode was saved...\n",
+    "\n",
+    "count = 0\n",
+    "bamEntry = inBam.fetch( until_eof = True )\n",
+    "for line in bamEntry:\n",
+    "    count +=1\n",
+    "    myCigar = str(line.cigar)\n",
+    "    if myCigar == 'None':\n",
+    "        continue\n",
+    "    if line.is_read1 is True:\n",
+    "        tag = str(\"%s%s%s\" % (line.qname[2:-2],'-','R1'))\n",
+    "    if line.is_read2 is True:\n",
+    "        tag = str(\"%s%s%s\" % (line.qname[2:-2],'-','R2'))\n",
+    "    if(tag not in myData):\n",
+    "        myData[tag] = {count:{\"cigar\": line.cigar, \"sequence\":line.seq, \"flag\":line.flag, \"rname\": line.rname,\"pos\":line.pos,\"mpos\":line.mpos,\"isize\":line.isize, \"mrnm\":line.mrnm, \"qual\":line.qual }}\n",
+    "    else:\n",
+    "        myData[tag][count] = {\"cigar\": line.cigar, \"sequence\":line.seq, \"flag\":line.flag, \"rname\": line.rname,\"pos\":line.pos,\"mpos\":line.mpos,\"isize\":line.isize, \"mrnm\":line.mrnm, \"qual\":line.qual}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": [
+    "outBam= pysam.Samfile(\"/home/moetjens/kidd-lab-scratch/moetjens-projects/bsmn/MIPs/Run_2015-03-06/Trp53_processed.unassembled.consensusTest.bam\", \"wb\", template=inBam)\n",
+    "\n",
+    "for tag in myData.keys():\n",
+    "    a=pysam.AlignedRead()\n",
+    "    consensusSeq = \"\"\n",
+    "    mySequences = [] #use these lists to get the common descriptor from each tag with max command\n",
+    "    myCigar = []\n",
+    "    myPos = []\n",
+    "    myMpos= []\n",
+    "    myMrnm= []\n",
+    "    myIsize= []\n",
+    "    myRname = []\n",
+    "    myFlag = []\n",
+    "    myQual= []\n",
+    "    commonPos= \"\"#get the most common positon\n",
+    "    commonMpos=\"\"\n",
+    "    commonMrnm=\"\"\n",
+    "    commonIsize=\"\"\n",
+    "    commonRname=\"\"\n",
+    "    commonFlag=\"\"\n",
+    "    commonQual=\"\"\n",
+    "    barcodeCount = len(myData[tag]) # number of tag in a family\n",
+    "    count = 0 # count to keep track of indexs sorted through\n",
+    "    if barcodeCount > 2:\n",
+    "        for index in myData[tag].keys(): # iterate through all the reads of the current tag\n",
+    "            count +=1\n",
+    "            if len(myData[tag][index]['cigar']) > 1:\n",
+    "                continue\n",
+    "            myCigar.append(myData[tag][index]['cigar']) \n",
+    "            myPos.append(myData[tag][index]['pos'])\n",
+    "            myMpos.append(myData[tag][index]['mpos'])\n",
+    "            myMrnm.append(myData[tag][index]['mrnm'])\n",
+    "            myIsize.append(myData[tag][index]['isize'])\n",
+    "            myRname.append(myData[tag][index]['rname'])\n",
+    "            myFlag.append(myData[tag][index]['flag'])\n",
+    "            myQual.append(myData[tag][index]['qual'])\n",
+    "            if barcodeCount == count: #when finished sorting through the index\n",
+    "                commonCigar=max(myCigar) #get the most common cigar tuple\n",
+    "                commonPos=max(myPos) #get the most common positon\n",
+    "                commonMpos=max(myMpos)\n",
+    "                commonMrnm=max(myMrnm)\n",
+    "                commonIsize=max(myIsize)\n",
+    "                commonRname=max(myRname)\n",
+    "                commonFlag=max(myFlag)\n",
+    "                commonQual=max(myQual)\n",
+    "                #print commonRname\n",
+    "                for index in myData[tag].keys():\n",
+    "                    if myData[tag][index]['cigar']==commonCigar and myData[tag][index]['pos']==commonPos : #take sequences that have the common position and cigar string\n",
+    "                        mySequences.append(myData[tag][index]['sequence'])\n",
+    "                familySize = len(mySequences)\n",
+    "                if familySize > 2:\n",
+    "                    consensusSeq = \"\"\n",
+    "                    for pos in range(0, len(mySequences[0])):\n",
+    "                        consensus_list=[]\n",
+    "                        for seq in mySequences:\n",
+    "                            consensus_list.append(seq[pos])\n",
+    "                        consensusSeq += max(consensus_list)\n",
+    "    if consensusSeq and consensusSeq.count(\"N\")/ len(consensusSeq) <= 0.3: \n",
+    "        a = pysam.AlignedRead()\n",
+    "        a.qname = str(tag) + \":\" + str(familySize)\n",
+    "        #a.flag = 8 #mate unmapped\n",
+    "        a.flag = commonFlag\n",
+    "        a.seq = consensusSeq\n",
+    "        a.rname = commonRname\n",
+    "        a.pos = commonPos\n",
+    "        a.mapq = 255\n",
+    "        a.cigar = commonCigar\n",
+    "        a.mrnm = commonMrnm\n",
+    "        a.mpos= commonMpos\n",
+    "        a.isize = 0\n",
+    "        a.qual = 'J' * len(consensusSeq)\n",
+    "        outBam.write(a)\n",
+    "\n",
+    "outBam.close()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[(0, 22), (4, 54)]\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "2"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "print a.cigar\n",
+    "len(a.cigar)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 139,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "['CGTAGAGAAGA',\t131\t10\t69591296\t50\t[(4, 41), (0, 23)]\t10\t69591297\t64\tCGAGATCTACACATACGAGATCCGTAATCGGGAAGCTGAAGCCAAACTGCTAGCTCCCATCACC\tFFEC@DGGFECF@EGFFFF@@CFDEF7GCFGGGGGGFF8DGGGGFFDECGFFCGCGEGGEF@AF\t[('NM', 1), ('AS', 22), ('XS', 19)]\n"
+     ]
+    }
+   ],
+   "source": [
+    "print line"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 2",
+   "language": "python",
+   "name": "python2"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 2
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython2",
+   "version": "2.7.2"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
